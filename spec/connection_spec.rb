@@ -119,7 +119,8 @@ describe Elementary::Connection do
               expect(response.reason.to_s).to eq("connection refused: localhost:8090")
             end
           end
-          context 'with http connection success' do
+
+          context 'with http connection success', :type => :integration do
             let(:opts) { { 'hosts' => [{'host' => 'localhost', 'port' => '8000'}] } }
             subject(:response) { connection.rpc.echo(request) }
 
@@ -134,6 +135,30 @@ describe Elementary::Connection do
               value = response.value # Wait on the future
               expect(response).not_to be_rejected
               expect(value.data).to eql('rspec')
+            end
+          end
+
+          context 'with :future_options specifying a Concurrent::Executor' do
+            class MyExecutor < Concurrent::ImmediateExecutor
+              attr_reader :post_count
+              def initialize
+                super
+                @post_count = 0
+              end
+              def post(*args, &task)
+                @post_count = @post_count + 1
+                super
+              end
+            end
+            let(:my_executor) { MyExecutor.new }
+            let(:opts) { { 'hosts' => [{'host' => 'localhost', 'port' => '8000'}],
+                           :future_options => { :executor => my_executor } } }
+            subject(:response) { connection.rpc.echo(request) }
+
+            it 'should run on the specified executor' do
+              expect(response).to be_instance_of Elementary::Future
+              response.value # Wait on the future
+              expect(my_executor.post_count).to be 1
             end
           end
          end
